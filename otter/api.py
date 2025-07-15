@@ -8,7 +8,7 @@ from contextlib import nullcontext, redirect_stdout
 from typing import Optional
 
 from .export import export_notebook
-from .run import main as run_grader
+from .run import run, get_results
 from .test_files import GradingResults
 
 
@@ -52,14 +52,15 @@ def grade_submission(
         cm = nullcontext()
 
     with cm:
-        results = run_grader(
+        runner, dp = run(
             submission_path,
             autograder=ag_path,
-            output_dir=None,
             no_logo=True,
             debug=debug,
             extra_submission_files=extra_submission_files,
         )
+
+        results = get_results(runner, dp, output_dir=None)
 
     if quiet:
         f.close()

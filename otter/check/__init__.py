@@ -95,13 +95,15 @@ def main(
         LOGGER.debug(f"Seed value: {seed}")
         LOGGER.info("Grading submission")
 
-        results = grade_notebook(
+        get_results = grade_notebook(
             file,
             tests_glob=qs,
             test_dir=tests_path,
             script=script,
             seed=seed,
         )
+
+        results = get_results()
 
         percentage = results.total / results.possible
         LOGGER.debug(f"Determined score percentage: {percentage}")

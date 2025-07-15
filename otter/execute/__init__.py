@@ -6,7 +6,7 @@ import pickle
 import tempfile
 
 from traitlets.config import Config
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Callable, TYPE_CHECKING
 
 from .checker import Checker
 from .logging import start_server
@@ -16,7 +16,6 @@ from ..utils import NBFORMAT_VERSION
 
 
 __all__ = ["Checker", "grade_notebook"]
-
 
 def grade_notebook(
     submission_path: str,
@@ -32,7 +31,7 @@ def grade_notebook(
     variables: Optional[dict[str, str]] = None,
     plugin_collection: Optional[PluginCollection] = None,
     force_python3_kernel: bool = True,
-):
+) -> Callable[..., GradingResults]:
     """
     Grade an assignment file and return grade information.
 
@@ -58,8 +57,7 @@ def grade_notebook(
     Returns:
         ``otter.test_files.GradingResults``: the results of grading
     """
-    from nbconvert.preprocessors import ExecutePreprocessor
-
+    from .jupyterlite_runner import JupyterLiteRunner
     from .preprocessor import GradingPreprocessor
 
     if tests_glob is None:
@@ -79,60 +77,65 @@ def grade_notebook(
 
     results_handle, results_file = tempfile.mkstemp(suffix=".pkl")
 
+    c = Config()
+
+    #(host, port), stop_server = start_server()
+
     try:
-        c = Config()
+        # GradingPreprocessor config
+        c.GradingPreprocessor.cwd = cwd
+        c.GradingPreprocessor.test_dir = test_dir
+        c.GradingPreprocessor.tests_glob = tests_glob
+        c.GradingPreprocessor.results_path = results_file
+        c.GradingPreprocessor.seed = seed
+        c.GradingPreprocessor.seed_variable = seed_variable
+        c.GradingPreprocessor.otter_log = log
+        c.GradingPreprocessor.variables = variables
+        #c.GradingPreprocessor.logging_server_host = host
+        #c.GradingPreprocessor.logging_server_port = port
+        c.GradingPreprocessor.force_python3_kernel = force_python3_kernel
 
-        (host, port), stop_server = start_server()
+        # ExecutePreprocessor config
+        c.ExecutePreprocessor.allow_errors = ignore_errors
 
-        try:
-            # GradingPreprocessor config
-            c.GradingPreprocessor.cwd = cwd
-            c.GradingPreprocessor.test_dir = test_dir
-            c.GradingPreprocessor.tests_glob = tests_glob
-            c.GradingPreprocessor.results_path = results_file
-            c.GradingPreprocessor.seed = seed
-            c.GradingPreprocessor.seed_variable = seed_variable
-            c.GradingPreprocessor.otter_log = log
-            c.GradingPreprocessor.variables = variables
-            c.GradingPreprocessor.logging_server_host = host
-            c.GradingPreprocessor.logging_server_port = port
-            c.GradingPreprocessor.force_python3_kernel = force_python3_kernel
+        gp = GradingPreprocessor(config=c)
+        ep = JupyterLiteRunner(config=c)
 
-            # ExecutePreprocessor config
-            c.ExecutePreprocessor.allow_errors = ignore_errors
-
-            gp = GradingPreprocessor(config=c)
-            ep = ExecutePreprocessor(config=c)
-
-            nb, _ = gp.preprocess(nb)
-            executed_nb, _ = ep.preprocess(nb)
-
-        finally:
-            stop_server()
-            gp.cleanup()
-
-        os.close(results_handle)
-
-        try:
-            with open(results_file, "rb") as f:
-                results = pickle.load(f)
-        except Exception as e:
-            results = GradingResults.without_results(e)
-
-        if not isinstance(results, GradingResults):
-            raise TypeError(
-                "Results deserialized from grading notebook were not a GradingResults instance"
-            )
-
-        results.notebook = executed_nb
-
-        if plugin_collection is not None:
-            plugin_collection.run("after_grading", results)
-
-        return results
+        nb, _ = gp.preprocess(nb)
+        executed_nb_location = ep.startExecutingNotebook(nb)
 
     finally:
-        os.remove(results_file)
+        #stop_server()
+        gp.cleanup()
+
+    def finish_grading():
+        try:
+            os.close(results_handle)
+
+            executed_nb = nbformat.read(executed_nb_location, as_version=nbformat.NO_CONVERT)
+
+            try:
+                with open(results_file, "rb") as f:
+                    results = pickle.load(f)
+            except Exception as e:
+                results = GradingResults.without_results(e)
+
+            if not isinstance(results, GradingResults):
+                raise TypeError(
+                    "Results deserialized from grading notebook were not a GradingResults instance"
+                )
+
+            results.notebook = executed_nb
+
+            if plugin_collection is not None:
+                plugin_collection.run("after_grading", results)
+
+            return results
+
+        finally:
+            os.remove(results_file)
+
+    return finish_grading
 
 
 if TYPE_CHECKING:

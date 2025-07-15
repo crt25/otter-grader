@@ -2,7 +2,7 @@
 
 from unittest import mock
 
-from otter.generate.token import APIClient
+from otter.gradescrope.api_client import APIClient
 
 
 client = APIClient("token1")

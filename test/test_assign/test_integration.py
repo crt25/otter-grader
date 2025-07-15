@@ -12,7 +12,7 @@ from otter.assign import main as assign
 from otter.assign.assignment import Assignment
 from otter.assign.question_config import QuestionConfig
 from otter.assign.tests_manager import AssignmentTestsManager
-from otter.generate.token import APIClient
+from otter.gradescrope.api_client import APIClient
 from otter.test_files import TestCase
 from otter.utils import dump_yaml
 

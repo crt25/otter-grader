@@ -38,12 +38,14 @@ def main():
         with zipfile.ZipFile(args.zip_path, "r") as zf:
             nb_path = zf.extract(args.nb_arcname, path=nb_dir)
 
-        results = grade_notebook(
+        get_results = grade_notebook(
             nb_path,
             test_dir=args.tests_dir,
             tests_glob=glob(args.tests_dir + "/*.py"),
             cwd=os.getcwd(),
         )
+
+        results = get_results()
 
         with open(args.results_path, "wb") as f:
             dill.dump(results, f)

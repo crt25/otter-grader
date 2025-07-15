@@ -13,7 +13,7 @@ from glob import glob
 from jinja2 import Environment, PackageLoader
 from typing import Any, Literal, Optional, TYPE_CHECKING, Union
 
-from .token import APIClient
+from ..gradescrope.api_client import APIClient
 from .utils import merge_conda_environments, zip_folder
 from ..plugins import PluginCollection
 from ..run import AutograderConfig

@@ -13,7 +13,7 @@ from typing import Optional
 
 from ..autograder_config import AutograderConfig
 from ..utils import OtterRuntimeError, print_output, write_blank_page_to_stare_at_before_you
-from ....generate.token import APIClient
+from ....gradescrope.api_client import APIClient
 from ....nbmeta_config import NBMetadataConfig
 from ....test_files import GradingResults
 
@@ -239,7 +239,17 @@ class AbstractLanguageRunner(ABC):
         When this method is invoked, the working directory is assumed to already be
         ``self.ag_config.autograder_dir``.
 
-        Returns:
-            ``otter.test_files.GradingResults``: the results from grading the submission
+        """
+        ...
+
+    @abstractmethod
+    def get_scores(self) -> GradingResults:
+        """
+        Run the autograder according to the configurations in ``self.ag_config``.
+
+        When this method is invoked, the working directory is assumed to already be
+        ``self.ag_config.autograder_dir``.
+
+        Must only be called after ``run`` has been invoked.
         """
         ...

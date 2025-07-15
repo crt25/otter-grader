@@ -10,22 +10,22 @@ import zipfile
 
 from typing import Optional
 
-from .run_autograder import AutograderConfig, capture_run_output, main as run_autograder_main
+from .run_autograder import AutograderConfig, capture_run_output, run as autograder_run, get_results as autograder_get_results
+from .run_autograder.runners.abstract_runner import AbstractLanguageRunner
 from ..test_files import GradingResults
 
 
 __all__ = ["AutograderConfig", "capture_run_output", "main"]
 
 
-def main(
+def run(
     submission: str,
     *,
     autograder: str = "./autograder.zip",
-    output_dir: str = "./",
     no_logo: bool = False,
     debug: bool = False,
     extra_submission_files: Optional[list[str]] = None,
-) -> GradingResults:
+) -> tuple[AbstractLanguageRunner, str]:
     """
     Grades a single submission using the autograder configuration ``autograder`` without
     containerization.
@@ -37,8 +37,6 @@ def main(
     Args:
         submission (``str``): path to a submission to grade
         autograder (``str``): path to an Otter configuration zip file
-        output_dir (``str | None``): directory at which to copy the results JSON file; if ``None``,
-            the results JSON file is not copied
         no_logo (``bool``): whether to suppress the Otter logo from being printed to stdout
         debug (``bool``); whether to run in debug mode (without ignoring errors)
         extra_submission_files (``list[str] | None``): extra files to copy into the submission
@@ -49,36 +47,65 @@ def main(
     """
     dp = tempfile.mkdtemp()
 
+    ag_dir = os.path.join(dp, "autograder")
+
+    for subdir in ["source", "submission", "results"]:
+        path = os.path.join(ag_dir, subdir)
+        os.makedirs(path, exist_ok=True)
+
+    with open(os.path.join(ag_dir, "submission_metadata.json"), "w+") as f:
+        json.dump({}, f)
+
+    ag_zip = zipfile.ZipFile(autograder)
+    ag_zip.extractall(os.path.join(ag_dir, "source"))
+    ag_zip.close()
+
+    if os.path.splitext(submission)[1] == ".zip":
+        subm_zip = zipfile.ZipFile(submission)
+        subm_zip.extractall(os.path.join(ag_dir, "submission"))
+        subm_zip.close()
+
+    else:
+        shutil.copy(submission, os.path.join(ag_dir, "submission"))
+
+    for file in extra_submission_files or []:
+        fp = pathlib.Path(os.path.join(ag_dir, file))
+        # create any intermediate directories before copying the file
+        fp.parents[0].mkdir(parents=True, exist_ok=True)
+        shutil.copy(file, os.path.join(ag_dir, "submission", file))
+
+    logo = not no_logo
+    runner = autograder_run(ag_dir, logo=logo, debug=debug, otter_run=True)
+
+    return runner, dp
+
+def get_results(
+    runner: AbstractLanguageRunner,
+    dp: str,
+    output_dir: str = "./",
+) -> GradingResults:
+    """
+    Grades a single submission using the autograder configuration ``autograder`` without
+    containerization.
+
+    Creates a temporary directory in the user's system and replicates grading container structure.
+    Calls the autograder and loads the pickled results object. **Note:** This does not run any setup
+    or installation files, so the user's environment will need to have everything pre-installed.
+
+    Args:
+        runner (``AbstractLanguageRunner``): the runner object that has been set up with the autograder configuration
+        autograder (``str``): path to an Otter configuration zip file
+        dp (``str``): temporary directory path where the autograder files are located
+        output_dir (``str | None``): directory at which to copy the results JSON file; if ``None``,
+            the results JSON file is not copied
+
+    Returns:
+        ``otter.test_files.GradingResults``: the grading results object
+    """
     try:
         ag_dir = os.path.join(dp, "autograder")
 
-        for subdir in ["source", "submission", "results"]:
-            path = os.path.join(ag_dir, subdir)
-            os.makedirs(path, exist_ok=True)
-
-        with open(os.path.join(ag_dir, "submission_metadata.json"), "w+") as f:
-            json.dump({}, f)
-
-        ag_zip = zipfile.ZipFile(autograder)
-        ag_zip.extractall(os.path.join(ag_dir, "source"))
-        ag_zip.close()
-
-        if os.path.splitext(submission)[1] == ".zip":
-            subm_zip = zipfile.ZipFile(submission)
-            subm_zip.extractall(os.path.join(ag_dir, "submission"))
-            subm_zip.close()
-
-        else:
-            shutil.copy(submission, os.path.join(ag_dir, "submission"))
-
-        for file in extra_submission_files or []:
-            fp = pathlib.Path(os.path.join(ag_dir, file))
-            # create any intermediate directories before copying the file
-            fp.parents[0].mkdir(parents=True, exist_ok=True)
-            shutil.copy(file, os.path.join(ag_dir, "submission", file))
-
-        logo = not no_logo
-        run_autograder_main(ag_dir, logo=logo, debug=debug, otter_run=True)
+        autograder_get_results(runner)
 
         results_path = os.path.join(ag_dir, "results", "results.json")
         if output_dir:

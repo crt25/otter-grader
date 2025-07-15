@@ -70,6 +70,44 @@ class PythonRunner(AbstractLanguageRunner):
         )
 
         return pdf_path
+    
+    def get_log(self) -> Log | None:
+        if os.path.isfile(OTTER_LOG_FILENAME):
+            try:
+                log = Log.from_file(OTTER_LOG_FILENAME, ascending=False)
+
+            except Exception as e:
+                if self.ag_config.grade_from_log:
+                    raise e
+
+                else:
+                    print_output(f"Could not deserialize the log due to an error:\n{e}")
+                    log = None
+
+        else:
+            if self.ag_config.grade_from_log:
+                raise OtterRuntimeError("Grade from log indicated but log not found")
+
+            log = None
+
+        return log
+    
+    def get_plugin_collection(self, subm_path: str) -> PluginCollection | None:
+        # load plugins
+        plugins = self.ag_config.plugins
+
+        if plugins:
+            with open("../submission_metadata.json", encoding="utf-8") as f:
+                submission_metadata = json.load(f)
+
+            plugin_collection = PluginCollection(
+                plugins, os.path.abspath(subm_path), submission_metadata
+            )
+
+        else:
+            plugin_collection = None
+
+        return plugin_collection
 
     def run(self):
         os.environ["PATH"] = f"{self.ag_config.miniconda_path}/bin:" + os.environ.get("PATH", "")
@@ -80,47 +118,14 @@ class PythonRunner(AbstractLanguageRunner):
             self.validate_submission(subm_path)
 
             # load plugins
-            plugins = self.ag_config.plugins
-
-            if plugins:
-                with open("../submission_metadata.json", encoding="utf-8") as f:
-                    submission_metadata = json.load(f)
-
-                plugin_collection = PluginCollection(
-                    plugins, os.path.abspath(subm_path), submission_metadata
-                )
-
-            else:
-                plugin_collection = None
+            plugin_collection = self.get_plugin_collection(subm_path)
 
             if plugin_collection:
                 plugin_collection.run("before_grading", self.ag_config)
 
-            pdf_error = None
-            if self.ag_config.token is not None or self.ag_config.pdf:
-                pdf_error = self.write_and_maybe_submit_pdf(subm_path)
-
             self.sanitize_tokens()
 
-            if os.path.isfile(OTTER_LOG_FILENAME):
-                try:
-                    log = Log.from_file(OTTER_LOG_FILENAME, ascending=False)
-
-                except Exception as e:
-                    if self.ag_config.grade_from_log:
-                        raise e
-
-                    else:
-                        print_output(f"Could not deserialize the log due to an error:\n{e}")
-                        log = None
-
-            else:
-                if self.ag_config.grade_from_log:
-                    raise OtterRuntimeError("Grade from log indicated but log not found")
-
-                log = None
-
-            scores = grade_notebook(
+            self.get_results = grade_notebook(
                 subm_path,
                 tests_glob=glob("./tests/*.py"),
                 cwd=os.getcwd(),
@@ -128,12 +133,28 @@ class PythonRunner(AbstractLanguageRunner):
                 ignore_errors=not self.ag_config.debug,
                 seed=self.ag_config.seed,
                 seed_variable=self.ag_config.seed_variable,
-                log=log if self.ag_config.grade_from_log else None,
+                log=self.get_log() if self.ag_config.grade_from_log else None,
                 variables=self.ag_config.serialized_variables,
                 plugin_collection=plugin_collection,
                 script=os.path.splitext(subm_path)[1] == ".py",
                 force_python3_kernel=not self.ag_config.otter_run,
             )
+    
+    def get_scores(self):
+        if self.get_results is None:
+            raise OtterRuntimeError("get_scores() was called before")
+
+        with chdir("./submission"):
+
+            log = self.get_log()
+            subm_path = self.resolve_submission_path()
+            pdf_error = None
+
+            if self.ag_config.token is not None or self.ag_config.pdf:
+                pdf_error = self.write_and_maybe_submit_pdf(subm_path)
+
+            # call the function stored by run() to get the results
+            scores = self.get_results()
 
             if pdf_error:
                 scores.set_pdf_error(pdf_error)
@@ -163,6 +184,8 @@ class PythonRunner(AbstractLanguageRunner):
 
                 else:
                     print_output("No log found with which to verify student scores.")
+
+            plugin_collection = self.get_plugin_collection(subm_path)
 
             if plugin_collection:
                 report = plugin_collection.generate_report()

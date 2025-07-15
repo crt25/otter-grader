@@ -16,7 +16,7 @@ from contextlib import contextmanager, nullcontext
 from textwrap import dedent
 from unittest import mock
 
-from otter.generate.token import APIClient
+from otter.gradescrope.api_client import APIClient
 from otter.run import main as run_main
 
 

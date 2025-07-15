@@ -11,6 +11,7 @@ from typing import Any, Union
 
 from .autograder_config import AutograderConfig
 from .runners import create_runner
+from .runners.abstract_runner import AbstractLanguageRunner
 from .utils import capture_run_output, OtterRuntimeError, print_output
 from ... import logging
 from ...utils import chdir, OTTER_CONFIG_FILENAME
@@ -23,7 +24,7 @@ __all__ = ["AutograderConfig", "capture_run_output", "main"]
 LOGGER = logging.get_logger(__name__)
 
 
-def main(autograder_dir: str, *, otter_run: bool = False, **kwargs: Any):
+def run(autograder_dir: str, *, otter_run: bool = False, **kwargs: Any) -> AbstractLanguageRunner:
     """
     Run the autograding process.
 
@@ -35,8 +36,6 @@ def main(autograder_dir: str, *, otter_run: bool = False, **kwargs: Any):
         **kwargs: keyword arguments for updating autograder configurations; these values override
             anything present in ``otter_config.json``
     """
-    import dill
-
     config_fp = os.path.join(autograder_dir, "source", OTTER_CONFIG_FILENAME)
     if os.path.isfile(config_fp):
         with open(config_fp, encoding="utf-8") as f:
@@ -76,7 +75,54 @@ def main(autograder_dir: str, *, otter_run: bool = False, **kwargs: Any):
                             zf.extractall()
 
                 runner.prepare_files()
-                scores = runner.run()
+                runner.run()
+
+            except OtterRuntimeError as e:
+                output = {
+                    "score": 0,
+                    "stdout_visibility": "hidden",
+                    "tests": [
+                        {
+                            "name": "Autograder Error",
+                            "output": f"Otter encountered an error when grading this submission:\n\n{e}",
+                        },
+                    ],
+                }
+
+                # write exception to the output file
+                if "output" in vars():
+                    with open("./results/results.json", "w+") as f:
+                        json.dump(output, f, indent=4)
+
+                raise e
+    return runner
+
+        
+def get_results(runner: AbstractLanguageRunner):
+    """
+    Run the autograding process.
+
+    Args:
+        autograder_dir (``str``): the absolute path of the directory in which autograding is occurring
+            (e.g. on Gradescope, this is ``/autograder``)
+        otter_run (``bool``): whether this function is being invoked by Otter Run (i.e. without
+            containerization)
+        **kwargs: keyword arguments for updating autograder configurations; these values override
+            anything present in ``otter_config.json``
+    """
+    import dill
+
+
+    ctx = nullcontext()
+    if runner.ag_config.log_level is not None:
+        ctx = logging.level_context(runner.ag_config.log_level)
+
+    with ctx:
+        abs_ag_path = os.path.abspath(runner.ag_config.autograder_dir)
+        with chdir(abs_ag_path):
+
+            try:
+                scores = runner.get_scores()
                 with open("results/results.pkl", "wb+") as f:
                     dill.dump(scores, f)
 

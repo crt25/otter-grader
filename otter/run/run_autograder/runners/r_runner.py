@@ -215,4 +215,8 @@ class RRunner(AbstractLanguageRunner):
             os.remove(subm_path)
             self.subm_path_deletion_required = False
 
-        return scores
+        # store the scores to be retrieved later
+        self.scores = scores
+    
+    def get_scores(self):
+        return self.scores
