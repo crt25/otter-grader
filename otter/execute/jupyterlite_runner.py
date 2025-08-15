@@ -67,7 +67,6 @@ import os
 import time
 
 await micropip.install("/jupyter/pypi/otter_grader-6.1.3-py3-none-any.whl")
-await micropip.install("matplotlib")
 
 os.chdir("{submission_dir}")
 
