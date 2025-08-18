@@ -133,6 +133,8 @@ class PythonRunner(AbstractLanguageRunner):
                 plugin_collection=plugin_collection,
                 script=os.path.splitext(subm_path)[1] == ".py",
                 force_python3_kernel=not self.ag_config.otter_run,
+                log_server=self.ag_config.log_server,
+                execute_submission=self.ag_config.execute_submission,
             )
 
             if pdf_error:

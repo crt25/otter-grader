@@ -32,6 +32,8 @@ def grade_notebook(
     variables: Optional[dict[str, str]] = None,
     plugin_collection: Optional[PluginCollection] = None,
     force_python3_kernel: bool = True,
+    log_server: bool = True,
+    execute_submission: bool = True,
 ):
     """
     Grade an assignment file and return grade information.
@@ -58,8 +60,6 @@ def grade_notebook(
     Returns:
         ``otter.test_files.GradingResults``: the results of grading
     """
-    from nbconvert.preprocessors import ExecutePreprocessor
-
     from .preprocessor import GradingPreprocessor
 
     if tests_glob is None:
@@ -82,7 +82,10 @@ def grade_notebook(
     try:
         c = Config()
 
-        (host, port), stop_server = start_server()
+        host, port, stop_server = None, None, None
+
+        if log_server:
+            (host, port), stop_server = start_server()
 
         try:
             # GradingPreprocessor config
@@ -94,21 +97,31 @@ def grade_notebook(
             c.GradingPreprocessor.seed_variable = seed_variable
             c.GradingPreprocessor.otter_log = log
             c.GradingPreprocessor.variables = variables
-            c.GradingPreprocessor.logging_server_host = host
-            c.GradingPreprocessor.logging_server_port = port
             c.GradingPreprocessor.force_python3_kernel = force_python3_kernel
+
+            if log_server and (host is None or port is None):
+                c.GradingPreprocessor.logging_server_host = host
+                c.GradingPreprocessor.logging_server_port = port
 
             # ExecutePreprocessor config
             c.ExecutePreprocessor.allow_errors = ignore_errors
 
             gp = GradingPreprocessor(config=c)
-            ep = ExecutePreprocessor(config=c)
-
             nb, _ = gp.preprocess(nb)
-            executed_nb, _ = ep.preprocess(nb)
+
+            if execute_submission:
+                from nbconvert.preprocessors import ExecutePreprocessor
+
+                ep = ExecutePreprocessor(config=c)
+                executed_nb, _ = ep.preprocess(nb)
+
+            else:
+                executed_nb = nb
 
         finally:
-            stop_server()
+            if stop_server is not None:
+                stop_server()
+
             gp.cleanup()
 
         os.close(results_handle)

@@ -178,5 +178,15 @@ class AutograderConfig(fica.Config):
         default=False,
     )
 
+    log_server: bool = fica.Key(
+        description="Whether to start a logging server for the autograder",
+        default=True,
+    )
+
+    execute_submission: bool = fica.Key(
+        description="Whether to execute the submission code. You can set to false if you provide a jupyter notebook that is already executed.",
+        default=True,
+    )
+
     otter_run: bool = False
     """whether this autograder run is being run by Otter Run (i.e. without containerization)"""

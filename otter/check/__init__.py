@@ -49,6 +49,8 @@ def main(
     tests_path: str = "./tests",
     question: Optional[str] = None,
     seed: Optional[int] = None,
+    log_server: bool = True,
+    execute_submission: bool = True,
 ):
     """
     Runs Otter Check
@@ -101,6 +103,8 @@ def main(
             test_dir=tests_path,
             script=script,
             seed=seed,
+            log_server=log_server,
+            execute_submission=execute_submission,
         )
 
         percentage = results.total / results.possible
