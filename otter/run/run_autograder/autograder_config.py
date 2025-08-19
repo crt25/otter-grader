@@ -183,9 +183,9 @@ class AutograderConfig(fica.Config):
         default=True,
     )
 
-    execute_submission: bool = fica.Key(
-        description="Whether to execute the submission code. You can set to false if you provide a jupyter notebook that is already executed.",
-        default=True,
+    precomputed_results: Optional[str] = fica.Key(
+        description="Optional path to the precomputed results file. If this path is provided, the notebook will not be executed.",
+        default=None,
     )
 
     otter_run: bool = False

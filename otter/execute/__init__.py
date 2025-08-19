@@ -33,7 +33,7 @@ def grade_notebook(
     plugin_collection: Optional[PluginCollection] = None,
     force_python3_kernel: bool = True,
     log_server: bool = True,
-    execute_submission: bool = True,
+    precomputed_results: Optional[str] = None,
 ):
     """
     Grade an assignment file and return grade information.
@@ -109,7 +109,7 @@ def grade_notebook(
             gp = GradingPreprocessor(config=c)
             nb, _ = gp.preprocess(nb)
 
-            if execute_submission:
+            if precomputed_results is None:
                 from nbconvert.preprocessors import ExecutePreprocessor
 
                 ep = ExecutePreprocessor(config=c)
@@ -127,7 +127,8 @@ def grade_notebook(
         os.close(results_handle)
 
         try:
-            with open(results_file, "rb") as f:
+            results_file_path = precomputed_results if precomputed_results is not None else results_file
+            with open(results_file_path, "rb") as f:
                 results = pickle.load(f)
         except Exception as e:
             results = GradingResults.without_results(e)

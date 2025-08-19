@@ -50,7 +50,7 @@ def main(
     question: Optional[str] = None,
     seed: Optional[int] = None,
     log_server: bool = True,
-    execute_submission: bool = True,
+    precomputed_results: Optional[str] = None,
 ):
     """
     Runs Otter Check
@@ -104,7 +104,7 @@ def main(
             script=script,
             seed=seed,
             log_server=log_server,
-            execute_submission=execute_submission,
+            precomputed_results=precomputed_results,
         )
 
         percentage = results.total / results.possible
